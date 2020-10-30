@@ -1,0 +1,42 @@
+[package]
+name = "fivedbf"
+version = "0.1.0"
+authors = ["RocketRace <neverquitben@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+
+default = []
+
+# Optional compile time features
+
+## Enable debug mode
+debug = []
+
+## Increase cell count to 250000 (default: 30000)
+more_cells = []
+## Increase cell count to 2000000 (default: 30000)
+even_more_cells = []
+## If both of these are specified (please don't), `even_more_cells` is prioritized
+
+## Increase cell width to 16 bits (default: 8 bits)
+16_bit = []
+## Increase cell width to 32 bits (default: 8 bits)
+32_bit = []
+## If both of these are specified (please don't), `32_bit` is prioritized
+
+## Don't overflow / underflow cells (default: do overflow / underflow)
+no_overflow = []
+
+## Negative cell pointers wrap around the tape (default: don't)
+pointer_wrapping = []
+
+## Return 0 on EOF (default: return -1)
+eof_0 = []
+## Keep cell unchanged on EOF (default: return -1)
+eof_unchanged = []
+## If both of these are specified (please don't), `eof_0` is prioritized
+
+[dependencies]
