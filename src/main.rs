@@ -33,7 +33,7 @@
 //! cargo build --release --flags "debug eof_unchanged"
 //! ```
 use std::{env, fs::read, io::{stdin, stdout, Read, Write}, process::exit};
-// All sorts of configuration, feel free to ignore]
+// All sorts of configuration, feel free to ignore
 #[cfg(not(any(feature = "more_cells", feature = "even_more_cells")))]
 const CELL_COUNT: usize = 30_000;
 #[cfg(all(feature = "more_cells", not(feature = "even_more_cells")))]
@@ -46,28 +46,6 @@ type CellSize = u8;
 type CellSize = u16;
 #[cfg(feature = "32_bit")]
 type CellSize = u32;
-#[cfg(not(feature = "no_overflow"))]
-fn increment(tape: &mut [CellSize], ptr: usize) { tape[ptr] += 1; }
-#[cfg(feature = "no_overflow")]
-fn increment(tape: &mut [CellSize], ptr: usize) { tape[ptr] = tape[ptr].saturating_add(1); }
-#[cfg(not(feature = "no_overflow"))]
-fn decrement(tape: &mut [CellSize], ptr: usize) { tape[ptr] -= 1; }
-#[cfg(feature = "no_overflow")]
-fn decrement(tape: &mut [CellSize], ptr: usize) { tape[ptr] = tape[ptr].saturating_sub(1); }
-#[cfg(not(feature = "pointer_wrapping"))]
-fn right(ptr: &mut usize) { if *ptr == CELL_COUNT - 1 { panic!("Pointer out of bounds") } else { *ptr += 1; } }
-#[cfg(feature = "pointer_wrapping")]
-fn right(ptr: &mut usize) { if *ptr == CELL_COUNT - 1 { *ptr = 0; } else { *ptr += 1; } }
-#[cfg(not(feature = "pointer_wrapping"))]
-fn left(ptr: &mut usize) { if *ptr == 0 { panic!("Pointer out of bounds") } else { *ptr -= 1; } }
-#[cfg(feature = "pointer_wrapping")]
-fn left(ptr: &mut usize) { if *ptr == 0 { *ptr = CELL_COUNT - 1; } else { *ptr -= 1; } }
-#[cfg(not(any(feature = "eof_0", feature = "eof_unchanged")))]
-fn eof(tape: &mut [CellSize], ptr: usize) { tape[ptr] = CellSize::MAX; }
-#[cfg(feature = "eof_0")]
-fn eof(tape: &mut [CellSize], ptr: usize) { tape[ptr] = 0; }
-#[cfg(all(feature = "eof_unchanged", not(feature = "eof_0")))]
-fn eof(tape: &mut [CellSize], ptr: usize) {}
 /// Not the most useful for debugging but it'll work
 fn _debug(timelines: &[Timeline], step: usize) {
     eprintln!("=== Step {} ===", step);
@@ -211,17 +189,33 @@ fn run(program: &[Token]) -> ! {
                 match program[t.pc] {
                     Token::Inc => {
                         t.snapshot();
-                        for &ptr in &t.ptrs { increment(&mut t.tape, ptr); }
+                        for &ptr in &t.ptrs { 
+                            #[cfg(not(feature = "no_overflow"))] { t.tape[ptr] += 1; }
+                            #[cfg(feature = "no_overflow")] { t.tape[ptr] = t.tape[ptr].saturating_add(1); }
+                        }
                     }
                     Token::Dec => {
                         t.snapshot();
-                        for &ptr in &t.ptrs { decrement(&mut t.tape, ptr); }
+                        for &ptr in &t.ptrs { 
+                            #[cfg(not(feature = "no_overflow"))] { t.tape[ptr] -= 1; }
+                            #[cfg(not(feature = "no_overflow"))] { t.tape[ptr] = t.tape[ptr].saturating_sub(1); }
+                        }
                     }
                     Token::Right => {
-                        for ptr in t.ptrs.iter_mut() { right(ptr); }
+                        for ptr in t.ptrs.iter_mut() { 
+                            if *ptr == CELL_COUNT - 1 { 
+                                #[cfg(not(feature = "pointer_wrapping"))] { panic!("Pointer out of bounds"); }
+                                #[cfg(feature = "pointer_wrapping")] { *ptr = 0; }
+                            } else { *ptr += 1; } 
+                        }
                     }
                     Token::Left => {
-                        for ptr in t.ptrs.iter_mut() { left(ptr); }
+                        for ptr in t.ptrs.iter_mut() { 
+                            if *ptr == 0 { 
+                                #[cfg(not(feature = "pointer_wrapping"))] { panic!("Pointer out of bounds"); }
+                                #[cfg(feature = "pointer_wrapping")] { *ptr = CELL_COUNT - 1; }
+                            } else { *ptr -= 1; } 
+                        }
                     }
                     Token::Read => {
                         t.snapshot();
@@ -233,7 +227,9 @@ fn run(program: &[Token]) -> ! {
                             let mut buffer = [0; 1];
                             match handle.read(&mut buffer) {
                                 Ok(n) => if n == 0 { 
-                                    eof(&mut t.tape, ptr); 
+                                    #[cfg(not(any(feature = "eof_0", feature = "eof_unchanged")))] { t.tape[ptr] = CellSize::MAX; }
+                                    #[cfg(feature = "eof_0")] { tape[ptr] = 0; }
+                                    #[cfg(all(feature = "eof_unchanged", not(feature = "eof_0")))] {}
                                 } 
                                 else { 
                                     t.tape[ptr] = buffer[0] as CellSize 
