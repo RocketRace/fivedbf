@@ -198,7 +198,7 @@ fn run(program: &[Token]) -> ! {
                         t.snapshot();
                         for &ptr in &t.ptrs { 
                             #[cfg(not(feature = "no_overflow"))] { t.tape[ptr] -= 1; }
-                            #[cfg(not(feature = "no_overflow"))] { t.tape[ptr] = t.tape[ptr].saturating_sub(1); }
+                            #[cfg(feature = "no_overflow")] { t.tape[ptr] = t.tape[ptr].saturating_sub(1); }
                         }
                     }
                     Token::Right => {
