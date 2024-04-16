@@ -32,20 +32,29 @@
 //! ```bash
 //! cargo build --release --flags "debug eof_unchanged"
 //! ```
+
 use std::{env, fs::read, io::{stdin, stdout, Read, Write}, process::exit};
+
 // All sorts of configuration, feel free to ignore
+
 #[cfg(not(any(feature = "more_cells", feature = "even_more_cells")))]
 const CELL_COUNT: usize = 30_000;
+
 #[cfg(all(feature = "more_cells", not(feature = "even_more_cells")))]
 const CELL_COUNT: usize = 250_000;
+
 #[cfg(feature = "even_more_cells")]
 const CELL_COUNT: usize = 2_000_000;
+
 #[cfg(not(any(feature = "16_bit", feature = "32_bit")))]
 type CellSize = u8;
+
 #[cfg(all(feature = "16_bit", not(feature = "32_bit")))]
 type CellSize = u16;
+
 #[cfg(feature = "32_bit")]
 type CellSize = u32;
+
 /// Not the most useful for debugging but it'll work
 fn _debug(timelines: &[Timeline], step: usize) {
     eprintln!("=== Step {} ===", step);
@@ -58,6 +67,7 @@ fn _debug(timelines: &[Timeline], step: usize) {
         eprintln!("Tape: {:?} ...", &t.tape[..100]);
     }
 }
+
 /// AST consists of a vector of these tokens
 #[derive(Debug)]
 enum Token {
@@ -66,12 +76,14 @@ enum Token {
     // 5DBF instructions
     Back, Up, Down, Await, Spawn(usize), Kill
 }
+
 /// Parses a 5DBF program from source bytes
 fn parse(bytes: &[u8]) -> Vec<Token> {
     let mut program = vec![];
     let mut loop_stack = vec![];
     let mut paren_stack = vec![];
     let mut pc = 0usize;
+
     // i is only kept for error reporting
     for (i, &byte) in bytes.iter().enumerate() {
         match byte {
@@ -81,6 +93,7 @@ fn parse(bytes: &[u8]) -> Vec<Token> {
             b'<' => {program.push(Token::Left); pc += 1},
             b',' => {program.push(Token::Read); pc += 1},
             b'.' => {program.push(Token::Write); pc += 1},
+
             b'[' => {
                 loop_stack.push((pc, i));
                 program.push(Token::JumpZero(0));
@@ -89,16 +102,18 @@ fn parse(bytes: &[u8]) -> Vec<Token> {
             b']' => {
                 let (old, _) = match loop_stack.pop() {
                     Some(n) => n,
-                    None => panic!(format!("Unmatched `]` at position {}", i)),
+                    None => panic!("Unmatched `]` at position {}", i),
                 };
                 program[old] = Token::JumpZero(pc);
                 program.push(Token::JumpNonzero(old));
                 pc += 1;
             },
+
             b'~' => {program.push(Token::Back); pc += 1},
             b'^' => {program.push(Token::Up); pc += 1},
             b'v' => {program.push(Token::Down); pc += 1},
             b'@' => {program.push(Token::Await); pc += 1},
+
             b'(' => {
                 paren_stack.push((pc, i));
                 program.push(Token::Spawn(0));
@@ -107,7 +122,7 @@ fn parse(bytes: &[u8]) -> Vec<Token> {
             b')' => {
                 let (old, _) = match paren_stack.pop() {
                     Some(n) => n,
-                    None => panic!(format!("Unmatched `)` at position {}", i)),
+                    None => panic!("Unmatched `)` at position {}", i),
                 };
                 program[old] = Token::Spawn(pc);
                 program.push(Token::Kill);
@@ -116,15 +131,18 @@ fn parse(bytes: &[u8]) -> Vec<Token> {
             _ => ()
         }
     }
+
     // pretty rudimentary error handling, but it works
     if loop_stack.len() != 0 {
-        panic!(format!("Unmatched `[` at position {}", loop_stack[0].1));
+        panic!("Unmatched `[` at position {}", loop_stack[0].1);
     }
     if paren_stack.len() != 0 {
-        panic!(format!("Unmatched `(` at position {}", paren_stack[0].1));
+        panic!("Unmatched `(` at position {}", paren_stack[0].1);
     }
-    program
+
+    return program;
 }
+
 #[derive(Debug)]
 struct Timeline {
     tape: [CellSize; CELL_COUNT],
@@ -133,6 +151,7 @@ struct Timeline {
     ops: Vec<Vec<(usize, CellSize)>>,
     alive: bool,
 }
+
 impl Timeline {
     /// Create a copy of this timeline
     fn duplicate(&self, pc: usize) -> Self {
@@ -144,6 +163,7 @@ impl Timeline {
             alive: true,
         }
     }
+
     /// Push a minimal snapshot of the tape onto the history, for reversibility
     fn snapshot(&mut self) {
         self.ops.push(
@@ -153,6 +173,7 @@ impl Timeline {
         );
     }
 }
+
 /// Bulk of interpreter
 fn run(program: &[Token]) -> ! {
     let mut timelines = vec![Timeline {
@@ -162,23 +183,28 @@ fn run(program: &[Token]) -> ! {
         ops: vec![],
         alive: true,
     }];
+
     let mut _step = 0usize;
     loop {
+
         #[cfg(feature = "debug")] _debug(&timelines, _step);
         _step += 1;
         let mut to_spawn = vec![];
         let mut kill = false;
+
         // Array access is used instead of iter_mut().enumerate() because
         // the ^v instructions mutate adjacent timelines
         let count = timelines.len();
         if count == 0 {
             panic!("how");
         }
+
         for i in 0..count {
             // split_at_mut is necessary to guarantee to the borrow checker that
             // while `timelines` is mutated multiple times, each mutation is to a different element
             let (head, mid) = timelines.split_at_mut(i);
             let (t, tail) = mid.split_first_mut().unwrap();
+
             // dbg!(i, &t.ptrs);
             // run off the program
             if t.pc > program.len() - 1 {
@@ -194,6 +220,7 @@ fn run(program: &[Token]) -> ! {
                             #[cfg(feature = "no_overflow")] { t.tape[ptr] = t.tape[ptr].saturating_add(1); }
                         }
                     }
+
                     Token::Dec => {
                         t.snapshot();
                         for &ptr in &t.ptrs { 
@@ -201,6 +228,7 @@ fn run(program: &[Token]) -> ! {
                             #[cfg(feature = "no_overflow")] { t.tape[ptr] = t.tape[ptr].saturating_sub(1); }
                         }
                     }
+
                     Token::Right => {
                         for ptr in t.ptrs.iter_mut() { 
                             if *ptr == CELL_COUNT - 1 { 
@@ -209,6 +237,7 @@ fn run(program: &[Token]) -> ! {
                             } else { *ptr += 1; } 
                         }
                     }
+
                     Token::Left => {
                         for ptr in t.ptrs.iter_mut() { 
                             if *ptr == 0 { 
@@ -217,6 +246,7 @@ fn run(program: &[Token]) -> ! {
                             } else { *ptr -= 1; } 
                         }
                     }
+
                     Token::Read => {
                         t.snapshot();
                         let mut handle = stdin();
@@ -238,6 +268,7 @@ fn run(program: &[Token]) -> ! {
                             }
                         }
                     }
+
                     Token::Write => {
                         let mut handle = stdout();
                         let mut buffer = Vec::with_capacity(1);
@@ -251,16 +282,19 @@ fn run(program: &[Token]) -> ! {
                         // if flush fails and write doesn't, that's your problem and not mine
                         handle.flush().unwrap();
                     }
+
                     Token::JumpZero(n) => {
                         if t.ptrs.iter().all(|&ptr| t.tape[ptr] == 0) {
                             t.pc = n;
                         }
                     }
+
                     Token::JumpNonzero(n) => {
                         if t.ptrs.iter().any(|&ptr| t.tape[ptr] != 0) {
                             t.pc = n;
                         }
                     }
+
                     Token::Back => {
                         let op = match t.ops.pop() {
                             Some(o) => o,
@@ -270,6 +304,7 @@ fn run(program: &[Token]) -> ! {
                             t.tape[ptr] = value;
                         }
                     }
+
                     Token::Up => {
                         if i == 0 { t.ptrs.clear(); }
                         else {
@@ -278,6 +313,7 @@ fn run(program: &[Token]) -> ! {
                             upper.ptrs.extend(t.ptrs.drain(..));
                         }
                     }
+
                     Token::Down => {
                         if i == count - 1 { t.ptrs.clear(); }
                         else {
@@ -286,6 +322,7 @@ fn run(program: &[Token]) -> ! {
                             lower.ptrs.extend(t.ptrs.drain(..));
                         }
                     }
+
                     Token::Await => {
                         if i != count - 1 {
                             // unwrap valid for similar reasons
@@ -295,10 +332,12 @@ fn run(program: &[Token]) -> ! {
                             }
                         }
                     }
+
                     Token::Spawn(n) => {
                         to_spawn.push((i, t.pc + 1));
                         t.pc = n;
                     }
+
                     Token::Kill => {
                         kill = true;
                         t.alive = false;
@@ -313,6 +352,7 @@ fn run(program: &[Token]) -> ! {
                 timelines.insert(i + 1, timelines[i].duplicate(pc));
             }
         }
+
         // Any timelines were killed during execution
         if kill {
             let to_kill: Vec<usize> = timelines.iter()
@@ -326,15 +366,18 @@ fn run(program: &[Token]) -> ! {
         }
     }
 }
+
 fn main() {
     let fp = match env::args().skip(1).next() {
         Some(s) => s,
         None => panic!("File path not supplied"),
     };
+
     let bytes = match read(fp) {
         Ok(b) => b,
         Err(_) => panic!("File not found!"),
     };
+
     let program = parse(&bytes);
     #[cfg(feature = "debug")] dbg!(&program);
     run(&program);
