@@ -1,6 +1,6 @@
 # fivedbf
 
-Implementation of a [5D Brainfuck With Multiverse Time Travel](https://esolangs.org/wiki/5D_Brainfuck_With_Multiverse_Time_Travel) interpreter.
+Implementation of a [5D Brainfuck With Multiverse Time Travel](https://esolangs.org/wiki/5D_Brainfuck_With_Multiverse_Time_Travel) interpreter. See also the [Julia interpreter](https://github.com/tr00/5D-brainfuck-with-multiverse-time-travel)!
 
 # Usage
 
